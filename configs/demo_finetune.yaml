@@ -1,0 +1,46 @@
+# Transfer the pretrained demo POYO+ to monkey T, an animal it has never seen.
+# Epochs 0-5: the transformer is frozen and only the new neurons' embeddings (+ the new
+# session embedding) are learned ("unit identification"). Then everything is finetuned.
+#   python finetune.py --config-name demo_finetune
+defaults:
+  - base.yaml
+  - model: poyo_demo.yaml
+  - dataset: demo_monkey_t.yaml
+  - _self_
+
+ckpt_path: demo/checkpoints/poyo_plus_demo.ckpt      # pretrained weights to start from
+export_ckpt: demo/checkpoints/poyo_plus_monkey_t.ckpt  # final finetuned model is copied here
+freeze_perceiver_until_epoch: 6
+
+log_dir: ./demo/runs
+batch_size: 32
+num_workers: 0
+epochs: 16
+eval_epochs: 1
+gradient_clip_val: 1.0   # clip the gradient norm (training stability)
+
+optim:
+  # 10x the pretraining learning rate: the new neurons' embeddings start tiny, and LAMB's
+  # updates scale with the weight norm, so they need a bigger step size to move quickly
+  # (R² ~0.5 after the frozen phase instead of ~0.0 with the default rate).
+  base_lr: 3.125e-4
+  weight_decay: 1e-4
+  lr_decay_start: 0.5
+
+accelerator: auto
+rich_ui: true
+
+train_transforms:
+  - _target_: torch_brain.transforms.UnitDropout
+    max_units: 1000
+    min_units: 60
+    mode_units: 300
+    peak: 4
+
+wandb:
+  enable: false
+  run_name: poyo_plus_finetune_monkey_t
+
+hydra:
+  run:
+    dir: demo/runs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}_${wandb.run_name}

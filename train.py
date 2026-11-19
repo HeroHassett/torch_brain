@@ -1,23 +1,39 @@
 import logging
+import os
+import warnings
+
+# Keep the console tidy: these Lightning hints are expected here (h5py-backed datasets
+# are read in the main process, and the batch-transfer override is intentional).
+warnings.filterwarnings("ignore", ".*does not have many workers.*")
+warnings.filterwarnings("ignore", ".*overridden `transfer_batch_to_device`.*")
+
+# Let PyTorch fall back to the CPU for the (rare) operators that Apple-Silicon GPUs
+# (MPS) do not implement. Must be set before torch is imported.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+os.environ["HYDRA_FULL_ERROR"] = "1"
 
 import hydra
 import lightning as L
 import torch
 import torch.nn as nn
-from torch_optimizer import Lamb
 from lightning.pytorch.callbacks import (
     LearningRateMonitor,
     ModelCheckpoint,
     ModelSummary,
+    RichModelSummary,
+    RichProgressBar,
 )
+from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
 from omegaconf import DictConfig, OmegaConf
 
 from torch_brain.nn import compute_loss_or_metric
+from torch_brain.optim import Lamb  # same maths as torch_optimizer.Lamb, sync-free
 from torch_brain.registry import MODALITIY_REGISTRY
 from torch_brain.utils import callbacks as tbrain_callbacks
 from torch_brain.utils import seed_everything
 from torch_brain.utils.datamodules import DataModule
 from torch_brain.utils.stitcher import MultiTaskDecodingStitchEvaluator
+from torch_brain.utils.terminal import PALETTE, TerminalNotifier
 
 # higher speed on machines with tensor cores
 torch.set_float32_matmul_precision("medium")
@@ -65,6 +81,18 @@ class POYOTrainWrapper(L.LightningModule):
                 "interval": "step",
             },
         }
+
+    def transfer_batch_to_device(self, batch, device, dataloader_idx):
+        # `absolute_start` holds float64 absolute times that are only used on the CPU
+        # to stitch overlapping evaluation windows. Keep it on the CPU: this preserves
+        # its precision and avoids crashing on Apple-Silicon GPUs (no float64 on MPS).
+        absolute_start = None
+        if isinstance(batch, dict) and "absolute_start" in batch:
+            absolute_start = batch.pop("absolute_start")
+        batch = super().transfer_batch_to_device(batch, device, dataloader_idx)
+        if absolute_start is not None:
+            batch["absolute_start"] = absolute_start
+        return batch
 
     def training_step(self, batch, batch_idx):
         target_values = batch.pop("target_values")
@@ -120,9 +148,36 @@ class POYOTrainWrapper(L.LightningModule):
 
         return loss
 
+    def on_before_optimizer_step(self, optimizer):
+        # Optional gradient-norm clipping (`gradient_clip_val` in the config), plus a
+        # safety net: a step whose gradients are not finite is skipped entirely instead
+        # of turning every weight (and all later steps) into NaN.
+        max_norm = self.cfg.get("gradient_clip_val", None) or float("inf")
+        params = [p for p in self.model.parameters() if p.grad is not None]
+        if not params:
+            return
+        total_norm = torch.nn.utils.clip_grad_norm_(params, max_norm)
+        if not torch.isfinite(total_norm):
+            for p in params:
+                p.grad = None
+            logging.getLogger(__name__).warning(
+                f"Non-finite gradients at step {self.global_step}: step skipped."
+            )
+        else:
+            self.log("grad_norm", total_norm)
+
+    def on_validation_epoch_end(self):
+        # Apple GPUs (PyTorch 2.2 MPS backend): buffers cached during the evaluation pass
+        # can occasionally poison the next backward passes with non-finite gradients in
+        # the encoder cross-attention. Releasing the cache after validation avoids
+        # re-using them (and on_before_optimizer_step skips any remaining bad step).
+        if self.device.type == "mps":
+            torch.mps.synchronize()
+            torch.mps.empty_cache()
+
     def validation_step(self, batch, batch_idx):
         target_values = batch.pop("target_values")
-        batch.pop("target_weights")
+        target_weights = batch.pop("target_weights")
         absolute_starts = batch.pop("absolute_start")
         session_ids = batch.pop("session_id")
         output_subtask_index = batch.pop("output_subtask_index")
@@ -132,6 +187,7 @@ class POYOTrainWrapper(L.LightningModule):
 
         # add removed elements back to batch
         batch["target_values"] = target_values
+        batch["target_weights"] = target_weights  # zero weight = ignored by the metrics
         batch["absolute_start"] = absolute_starts
         batch["session_id"] = session_ids
         batch["output_subtask_index"] = output_subtask_index
@@ -142,22 +198,76 @@ class POYOTrainWrapper(L.LightningModule):
         return self.validation_step(batch, batch_idx)
 
 
-@hydra.main(version_base="1.3", config_path="./configs", config_name="train.yaml")
-def main(cfg: DictConfig):
-    # fix random seed, skipped if cfg.seed is None
-    seed_everything(cfg.seed)
-
-    # setup loggers
-    log = logging.getLogger(__name__)
-    wandb_logger = None
+def build_logger(cfg: DictConfig):
+    r"""Weights & Biases when enabled in the config, otherwise a local TensorBoard log
+    (browse it with ``tensorboard --logdir <log_dir>``)."""
     if cfg.wandb.enable:
-        wandb_logger = L.pytorch.loggers.WandbLogger(
+        return L.pytorch.loggers.WandbLogger(
             save_dir=cfg.log_dir,
             entity=cfg.wandb.entity,
             name=cfg.wandb.run_name,
             project=cfg.wandb.project,
             log_model=cfg.wandb.log_model,
         )
+    return L.pytorch.loggers.TensorBoardLogger(
+        save_dir=cfg.log_dir,
+        name=cfg.wandb.run_name or "poyo_plus",
+        default_hp_metric=False,
+    )
+
+
+def build_ui_callbacks(cfg: DictConfig):
+    r"""Progress bar + model summary. ``rich_ui: true`` swaps in colourful Rich widgets
+    (Catppuccin Macchiato palette) instead of the default tqdm bar."""
+    if not cfg.get("rich_ui", False):
+        return [ModelSummary(max_depth=2)]
+    theme = RichProgressBarTheme(
+        description=PALETTE["blue"],
+        progress_bar=PALETTE["magenta"],
+        progress_bar_finished=PALETTE["green"],
+        progress_bar_pulse=PALETTE["magenta"],
+        batch_progress=PALETTE["cyan"],
+        time=PALETTE["grey"],
+        processing_speed=PALETTE["orange"],
+        metrics=PALETTE["yellow"],
+        metrics_format=".4f",
+    )
+    return [
+        RichProgressBar(theme=theme, leave=True),
+        RichModelSummary(max_depth=2),
+    ]
+
+
+def build_trainer(cfg: DictConfig, callbacks, logger) -> L.Trainer:
+    # "auto" picks CUDA, then Apple-Silicon GPUs (MPS), then the CPU.
+    accelerator = cfg.get("accelerator", "auto")
+    return L.Trainer(
+        logger=logger,
+        default_root_dir=cfg.log_dir,
+        check_val_every_n_epoch=cfg.eval_epochs,
+        max_epochs=cfg.epochs,
+        log_every_n_steps=1,
+        strategy=(
+            "ddp_find_unused_parameters_true" if torch.cuda.is_available() else "auto"
+        ),
+        callbacks=callbacks,
+        precision=cfg.precision,
+        accelerator=accelerator,
+        devices=cfg.gpus,
+        num_nodes=cfg.nodes,
+        num_sanity_val_steps=0,  # Disable sanity validation
+        limit_val_batches=None,  # Ensure no limit on validation batches
+    )
+
+
+@hydra.main(version_base="1.3", config_path="./configs", config_name="train_poyo_mp")
+def main(cfg: DictConfig):
+    # fix random seed, skipped if cfg.seed is None
+    seed_everything(cfg.seed)
+
+    # setup loggers
+    log = logging.getLogger(__name__)
+    logger = build_logger(cfg)
 
     # make model
     model = hydra.utils.instantiate(cfg.model, readout_specs=MODALITIY_REGISTRY)
@@ -184,7 +294,7 @@ def main(cfg: DictConfig):
 
     callbacks = [
         evaluator,
-        ModelSummary(max_depth=2),  # Displays the number of parameters in the model.
+        *build_ui_callbacks(cfg),  # progress bar + model summary
         ModelCheckpoint(
             save_last=True,
             save_on_train_epoch_end=True,
@@ -196,25 +306,10 @@ def main(cfg: DictConfig):
         tbrain_callbacks.MemInfo(),
         tbrain_callbacks.EpochTimeLogger(),
         tbrain_callbacks.ModelWeightStatsLogger(),
+        TerminalNotifier(run_name=cfg.wandb.run_name or "POYO+"),
     ]
 
-    trainer = L.Trainer(
-        logger=wandb_logger,
-        default_root_dir=cfg.log_dir,
-        check_val_every_n_epoch=cfg.eval_epochs,
-        max_epochs=cfg.epochs,
-        log_every_n_steps=1,
-        strategy=(
-            "ddp_find_unused_parameters_true" if torch.cuda.is_available() else "auto"
-        ),
-        callbacks=callbacks,
-        precision=cfg.precision,
-        accelerator="gpu" if torch.cuda.is_available() else "cpu",
-        devices=cfg.gpus,
-        num_nodes=cfg.nodes,
-        num_sanity_val_steps=0,  # Disable sanity validation
-        limit_val_batches=None,  # Ensure no limit on validation batches
-    )
+    trainer = build_trainer(cfg, callbacks, logger)
 
     log.info(
         f"Local rank/node rank/world size/num nodes: "

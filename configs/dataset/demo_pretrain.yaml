@@ -1,0 +1,28 @@
+# Demo pretraining set: 12 sessions, 3 monkeys (C, M, J), 2 tasks, ~2.1 h of data.
+# Monkey T is deliberately left out so it can be used as a never-seen-before animal.
+# Cursor velocity is z-scored with the pooled train-split statistics of these sessions
+# (annotated cursor-tracking artifacts excluded, and ignored by the loss + metrics).
+- selection:
+  - brainset: perich_miller_population_2018
+    sessions:
+      - c_20131003_center_out_reaching
+      - c_20150629_center_out_reaching
+      - c_20150630_center_out_reaching
+      - c_20150701_center_out_reaching
+      - c_20151109_center_out_reaching
+      - c_20131009_random_target_reaching
+      - c_20131011_random_target_reaching
+      - m_20150610_center_out_reaching
+      - m_20150611_center_out_reaching
+      - m_20150616_center_out_reaching
+      - m_20140114_random_target_reaching
+      - j_20160405_center_out_reaching
+  config:
+    multitask_readout:
+      - readout_id: cursor_velocity_2d
+        normalize_mean: [0.0, 0.0]
+        normalize_std: [5.66, 6.06]
+        ignore_intervals: [cursor_outlier_segments]  # cursor-tracking glitches (>1000 cm/s)
+        metrics:
+          - metric:
+              _target_: torchmetrics.R2Score

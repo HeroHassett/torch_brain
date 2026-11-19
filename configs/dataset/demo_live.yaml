@@ -1,0 +1,15 @@
+# Tiny dataset for a live, from-scratch training run (a few minutes on a laptop).
+- selection:
+  - brainset: perich_miller_population_2018
+    sessions:
+      - c_20150629_center_out_reaching
+      - m_20150610_center_out_reaching
+  config:
+    multitask_readout:
+      - readout_id: cursor_velocity_2d
+        normalize_mean: [0.0, 0.0]
+        normalize_std: [5.66, 6.06]
+        ignore_intervals: [cursor_outlier_segments]  # cursor-tracking glitches (>1000 cm/s)
+        metrics:
+          - metric:
+              _target_: torchmetrics.R2Score

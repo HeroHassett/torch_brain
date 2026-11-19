@@ -6,7 +6,7 @@ seed: 42
 
 batch_size: 128
 eval_batch_size: null  # if null, will use batch_size
-num_workers: 4
+num_workers: 0
 
 epochs: 1000  # if -1, will use steps
 steps: -1  # if -1, will use epochs. Epochs take precedence.
@@ -22,7 +22,7 @@ wandb:
   entity: null
   project: poyo
   run_name: null
-  log_model: false
+  log_model: true
 
 backend_config: gpu_fp32
 precision: 32

@@ -1,6 +1,6 @@
 defaults:
   - base.yaml
-  - model: poyo_single_session.yaml
+  - model: poyo_1.yaml
   - dataset: perich_miller_population_2018.yaml
   - _self_
 
@@ -12,4 +12,4 @@ train_transforms:
     peak: 4
 
 wandb:
-  run_name: poyo_mp_mini
+  run_name: poyo_mp

@@ -1,0 +1,32 @@
+# Pretrain the demo POYO+ model on 12 sessions from 3 monkeys.
+#   python train.py --config-name demo_pretrain
+defaults:
+  - base.yaml
+  - model: poyo_demo.yaml
+  - dataset: demo_pretrain.yaml
+  - _self_
+
+log_dir: ./demo/runs
+batch_size: 64
+num_workers: 0
+epochs: 60
+eval_epochs: 5
+gradient_clip_val: 1.0   # clip the gradient norm (training stability)
+
+accelerator: auto   # CUDA > Apple-Silicon GPU (MPS) > CPU
+rich_ui: true       # colourful Rich progress bars + metric tables
+
+train_transforms:
+  - _target_: torch_brain.transforms.UnitDropout
+    max_units: 1000
+    min_units: 60
+    mode_units: 300
+    peak: 4
+
+wandb:
+  enable: false     # logs go to TensorBoard: tensorboard --logdir demo/runs
+  run_name: poyo_plus_demo_pretrain
+
+hydra:
+  run:
+    dir: demo/runs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}_${wandb.run_name}
