@@ -177,3 +177,86 @@ class SparseLamb(Optimizer):
                     p.data.add_(adam_step, alpha=-step_size * trust_ratio)
 
         return loss
+
+
+try:
+    from torch_optimizer import Lamb as _TorchOptimizerLamb
+except ImportError:  # pragma: no cover
+    _TorchOptimizerLamb = None
+
+
+if _TorchOptimizerLamb is not None:
+
+    class Lamb(_TorchOptimizerLamb):
+        r"""Drop-in replacement for :class:`torch_optimizer.Lamb` with the exact same
+        update rule, rewritten without host-device synchronizations.
+
+        The reference implementation branches in Python on ``weight_norm == 0`` and
+        passes a tensor as ``alpha``, which forces 2-3 GPU->CPU syncs *per parameter
+        tensor* at every step. On Apple-Silicon GPUs (MPS) that alone costs ~0.17 s
+        per step for a 5M-parameter POYO+; here the trust ratio is computed with
+        :func:`torch.where` and stays on the device.
+        """
+
+        @torch.no_grad()
+        def step(self, closure=None):
+            loss = None
+            if closure is not None:
+                with torch.enable_grad():
+                    loss = closure()
+
+            for group in self.param_groups:
+                beta1, beta2 = group["betas"]
+                for p in group["params"]:
+                    if p.grad is None:
+                        continue
+                    grad = p.grad
+                    if grad.is_sparse:
+                        raise RuntimeError(
+                            "Lamb does not support sparse gradients, "
+                            "please consider SparseAdam instead"
+                        )
+
+                    state = self.state[p]
+                    if len(state) == 0:
+                        state["step"] = 0
+                        state["exp_avg"] = torch.zeros_like(
+                            p, memory_format=torch.preserve_format
+                        )
+                        state["exp_avg_sq"] = torch.zeros_like(
+                            p, memory_format=torch.preserve_format
+                        )
+
+                    exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
+                    state["step"] += 1
+
+                    exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                    exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+
+                    if self.debias:
+                        bias_correction = math.sqrt(1 - beta2 ** state["step"])
+                        bias_correction /= 1 - beta1 ** state["step"]
+                    else:
+                        bias_correction = 1
+                    step_size = group["lr"] * bias_correction
+
+                    weight_norm = torch.norm(p).clamp(0, self.clamp_value)
+                    adam_step = exp_avg / exp_avg_sq.sqrt().add(group["eps"])
+                    if group["weight_decay"] != 0:
+                        adam_step.add_(p, alpha=group["weight_decay"])
+                    adam_norm = torch.norm(adam_step)
+
+                    trust_ratio = torch.where(
+                        (weight_norm == 0) | (adam_norm == 0),
+                        torch.ones_like(weight_norm),
+                        weight_norm / adam_norm,
+                    )
+                    state["weight_norm"] = weight_norm
+                    state["adam_norm"] = adam_norm
+                    state["trust_ratio"] = trust_ratio
+                    if self.adam:
+                        trust_ratio = torch.ones_like(weight_norm)
+
+                    p.add_(adam_step * trust_ratio, alpha=-step_size)
+
+            return loss

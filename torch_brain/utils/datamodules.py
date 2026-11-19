@@ -116,7 +116,7 @@ class DataModule(lightning.LightningDataModule):
             batch_size=self.cfg.batch_size,
             num_workers=self.cfg.num_workers,
             drop_last=True,
-            pin_memory=True,
+            pin_memory=torch.cuda.is_available(),  # only meaningful for CUDA
             persistent_workers=True if self.cfg.num_workers > 0 else False,
             prefetch_factor=2 if self.cfg.num_workers > 0 else None,
         )

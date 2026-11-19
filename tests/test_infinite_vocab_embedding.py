@@ -77,14 +77,15 @@ def test_duplicate_vocab_entries():
         emb.subset_vocab(["word1", "word2", "word1"])
 
 
-def test_checkpointing():
+def test_checkpointing(tmp_path):
+    ckpt = tmp_path / "checkpoint.pth"  # keep the repo clean
     # checkpointing a lazy embedding
     emb = InfiniteVocabEmbedding(embedding_dim=128)
-    torch.save(emb.state_dict(), "checkpoint.pth")
+    torch.save(emb.state_dict(), ckpt)
     del emb
     # load checkpoint
     emb = InfiniteVocabEmbedding(embedding_dim=128)
-    emb.load_state_dict(torch.load("checkpoint.pth"))
+    emb.load_state_dict(torch.load(ckpt))
     assert emb.is_lazy(), "Embedding should be lazy, no vocabulary set yet."
 
     # checkpointing a non-lazy embedding
@@ -92,15 +93,15 @@ def test_checkpointing():
     emb.initialize_vocab(["word1", "word2", "word3"])
 
     # checkpoint
-    torch.save(emb.state_dict(), "checkpoint.pth")
+    torch.save(emb.state_dict(), ckpt)
     del emb
     # load checkpoint
-    state_dict = torch.load("checkpoint.pth")
+    state_dict = torch.load(ckpt)
     assert "weight" in state_dict, "Checkpoint should contain weight matrix."
     assert "vocab" in state_dict, "Checkpoint should contain vocabulary."
 
     emb = InfiniteVocabEmbedding(embedding_dim=128)
-    emb.load_state_dict(torch.load("checkpoint.pth"))
+    emb.load_state_dict(torch.load(ckpt))
 
     assert emb.vocab == {
         "NA": 0,
@@ -113,7 +114,7 @@ def test_checkpointing():
     # load checkpoint after vocab is initialized
     emb = InfiniteVocabEmbedding(embedding_dim=128)
     emb.initialize_vocab(["word1", "word2", "word3"])
-    emb.load_state_dict(torch.load("checkpoint.pth"))
+    emb.load_state_dict(torch.load(ckpt))
 
     assert emb.vocab == {
         "NA": 0,

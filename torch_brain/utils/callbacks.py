@@ -1,6 +1,8 @@
 import time
 import subprocess
 import logging
+from pathlib import Path
+
 import lightning as L
 
 
@@ -75,6 +77,20 @@ class MemInfo(L.Callback):
     """
 
     def on_train_start(self, trainer, pl_module):
+        if not Path("/proc/meminfo").exists():
+            # macOS / Windows: no procfs, summarize with psutil instead
+            try:
+                import psutil
+
+                vm = psutil.virtual_memory()
+                logging.info(
+                    f"Memory info: {vm.total / 2**30:.1f} GiB total, "
+                    f"{vm.available / 2**30:.1f} GiB available ({vm.percent}% used)"
+                )
+            except ImportError:
+                pass
+            return
+
         # Log the output of `cat /proc/meminfo` using a shell script.
         try:
             # Execute the command and capture its output

@@ -69,16 +69,20 @@ class MultitaskReadout(nn.Module):
             task_output = self.projections[readout_name](output_embs[mask])
 
             if unpack_output:
-                # we need to distribute the outputs to their respective samples
+                # we need to distribute the outputs to their respective samples.
+                # torch.where returns indices in row-major order, so the tokens of
+                # each sample are contiguous and a single split does the job (one
+                # host sync instead of one boolean-mask gather per sample).
                 batch_index_filtered_by_decoder = torch.where(mask)[0]
 
-                targeted_batch_elements, batch_index_filtered_by_decoder = torch.unique(
-                    batch_index_filtered_by_decoder, return_inverse=True
+                targeted_batch_elements, counts = torch.unique_consecutive(
+                    batch_index_filtered_by_decoder, return_counts=True
                 )
-                for i in range(len(targeted_batch_elements)):
-                    outputs[targeted_batch_elements[i]][readout_name] = task_output[
-                        batch_index_filtered_by_decoder == i
-                    ]
+                chunks = torch.split(task_output, counts.tolist())
+                for batch_element, chunk in zip(
+                    targeted_batch_elements.tolist(), chunks
+                ):
+                    outputs[batch_element][readout_name] = chunk
             else:
                 outputs[readout_name] = task_output
 
@@ -163,6 +167,7 @@ def prepare_for_multitask_readout(
         "value_key",
         "context_key",
         "metrics",
+        "ignore_intervals",
     ]
 
     readout_index = list()
@@ -238,6 +243,22 @@ def prepare_for_multitask_readout(
         else:
             context_index[key] = np.zeros(len(values[key]), dtype=np.int64)
             weights[key] = np.ones(len(values[key]), dtype=np.float32) * weight
+
+        # zero-weight the samples that fall inside annotated artifact intervals, e.g.
+        # `ignore_intervals: [cursor_outlier_segments]` (cursor-tracking glitches with
+        # velocities > 1000 cm/s). They are then ignored by the loss and the metrics.
+        for interval_key in readout_config.get("ignore_intervals", []):
+            try:
+                interval = data.get_nested_attribute(interval_key)
+            except AttributeError:
+                continue  # this recording has no such annotation
+            if interval is None:
+                continue
+            ts = np.asarray(timestamps[-1])
+            inside = np.zeros(len(ts), dtype=bool)
+            for start, end in zip(interval.start, interval.end):
+                inside |= (ts >= start) & (ts < end)
+            weights[key] = np.where(inside, 0.0, weights[key]).astype(np.float32)
 
     # chain
     timestamps, batch = collate(

@@ -79,7 +79,6 @@ class POYOPlus(nn.Module):
         readout_specs: Dict[str, ModalitySpec],
     ):
         super().__init__()
-
         # embeddings
         self.unit_emb = InfiniteVocabEmbedding(dim, init_scale=emb_init_scale)
         self.session_emb = InfiniteVocabEmbedding(dim, init_scale=emb_init_scale)
@@ -332,6 +331,13 @@ class POYOPlusTokenizer:
         )
 
         session_index = np.repeat(session_index, len(output_timestamps))
+
+        # Timestamps are relative to the start of the (short) context window, so
+        # float32 is plenty of precision. Casting here also makes batches compatible
+        # with Apple Silicon (MPS) GPUs, which do not support float64 tensors.
+        spike_timestamps = spike_timestamps.astype(np.float32)
+        latent_timestamps = latent_timestamps.astype(np.float32)
+        output_timestamps = output_timestamps.float()
 
         batch = {
             # input sequence

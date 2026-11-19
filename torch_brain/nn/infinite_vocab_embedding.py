@@ -409,7 +409,26 @@ class InfiniteVocabEmbedding(nn.Module):
     def forward(self, input):
         if self.is_lazy():
             raise ValueError("No vocabulary was initialized. Use initialize_vocab()")
+        if input.device.type == "mps" and self.padding_idx is not None:
+            return self._forward_mps(input)
         return F.embedding(input, self.weight, self.padding_idx)
+
+    def _forward_mps(self, input):
+        r"""Apple-Silicon (MPS) friendly forward pass with identical outputs/gradients.
+
+        Padded batches contain tens of thousands of ``padding_idx`` entries. On MPS the
+        embedding backward pass scatter-adds every one of them into the *same* row,
+        which serializes on atomics and can take ~0.5 s per step. Here, padded
+        positions are spread over all rows and their outputs are multiplied by zero, so
+        they contribute exactly zero gradient (just like ``padding_idx``) without the
+        contention. The padding row is zero-initialized, so outputs are unchanged too.
+        """
+        is_pad = input == self.padding_idx
+        spread = torch.arange(input.numel(), device=input.device).view_as(input)
+        spread = spread % self.weight.shape[0]
+        safe_input = torch.where(is_pad, spread, input)
+        out = F.embedding(safe_input, self.weight)
+        return out * (~is_pad).unsqueeze(-1).to(out.dtype)
 
     def extra_repr(self) -> str:
         return "embedding_dim={}, num_embeddings={}".format(

@@ -5,6 +5,14 @@ from torchmetrics import R2Score
 from torch_brain.registry import DataType
 
 
+def _weighted_mean(values: torch.Tensor, weights) -> torch.Tensor:
+    r"""Weighted mean that stays finite when every weight is zero (e.g. a batch whose
+    targets all fall inside ignored artifact intervals): it then returns 0."""
+    if not torch.is_tensor(weights):
+        return values.mean() * weights
+    return (weights * values).sum() / weights.sum().clamp(min=1e-8)
+
+
 def compute_loss_or_metric(
     loss_or_metric: str,
     output_type: DataType,
@@ -30,9 +38,9 @@ def compute_loss_or_metric(
             # called as a metric
             # MSE loss
             loss_noreduce = F.mse_loss(output, target, reduction="none").mean(dim=1)
-            return (weights * loss_noreduce).sum() / weights.sum()
+            return _weighted_mean(loss_noreduce, weights)
         elif loss_or_metric == "r2":
-            r2score = R2Score(num_outputs=target.shape[1])
+            r2score = R2Score()#num_outputs=target.shape[1])
             return r2score(output, target)
         elif loss_or_metric == "frame_diff_acc":
             normalized_window = 30 / 450
@@ -58,7 +66,7 @@ def compute_loss_or_metric(
             loss_noreduce = F.cross_entropy(output, target, reduction="none")
             if loss_noreduce.ndim > 1:
                 loss_noreduce = loss_noreduce.mean(dim=1)
-            return (weights * loss_noreduce).sum() / weights.sum()
+            return _weighted_mean(loss_noreduce, weights)
         elif loss_or_metric == "mallows_distance":
             num_classes = output.size(-1)
             output = torch.softmax(output, dim=-1).view(-1, num_classes)
@@ -73,7 +81,7 @@ def compute_loss_or_metric(
                 ),
                 dim=-1,
             )
-            loss = (weights * loss).sum() / weights.sum()
+            loss = _weighted_mean(loss, weights)
             return loss
         elif loss_or_metric == "accuracy":
             pred_class = torch.argmax(output, dim=1)

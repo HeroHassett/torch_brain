@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class Embedding(nn.Embedding):
@@ -32,3 +33,21 @@ class Embedding(nn.Embedding):
         r"""Resets all learnable parameters of the module."""
         torch.nn.init.normal_(self.weight, mean=0, std=self.init_scale)
         self._fill_padding_idx_with_zero()
+
+    # Vocabularies at or below this size use a one-hot matmul on Apple Silicon (MPS).
+    _MPS_ONE_HOT_MAX_VOCAB = 64
+
+    def forward(self, input):
+        if (
+            input.device.type == "mps"
+            and self.num_embeddings <= self._MPS_ONE_HOT_MAX_VOCAB
+            and self.padding_idx is None
+            and self.max_norm is None
+        ):
+            # On MPS, the embedding backward pass scatter-adds into a handful of rows
+            # and serializes on atomics (e.g. token-type embeddings: 4 rows, one lookup
+            # per spike -> ~175 ms per step). A one-hot matmul computes the exact same
+            # function, and its backward is a fast, contention-free matmul (~5 ms).
+            one_hot = F.one_hot(input, self.num_embeddings).to(self.weight.dtype)
+            return one_hot @ self.weight
+        return super().forward(input)

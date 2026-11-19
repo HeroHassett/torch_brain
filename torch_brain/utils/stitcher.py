@@ -10,6 +10,7 @@ import torch
 import lightning as L
 import torchmetrics
 import wandb
+from lightning.fabric.utilities.apply_func import apply_to_collection
 
 import torch_brain
 from torch_brain.registry import ModalitySpec, DataType
@@ -74,6 +75,67 @@ def stitch(timestamps: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
     return averages
 
 
+def _score_style(value: float) -> str:
+    if value >= 0.8:
+        return "bold #a6da95"  # green
+    if value >= 0.5:
+        return "bold #eed49f"  # yellow
+    return "bold #ed8796"  # red
+
+
+def print_metrics_table(metrics: dict, prefix: str = "val", epoch: int = None):
+    r"""Pretty-prints evaluation metrics as a Rich table, one row per recording, with
+    an inline bar chart. Keys are expected to look like
+    ``<brainset>/<session>/<task>/<metric>/<prefix>``; the average metric is shown
+    in the footer.
+    """
+    from rich.console import Console
+    from rich.table import Table
+    from rich.text import Text
+    from rich import box, get_console
+
+    console: Console = get_console()
+    title = f"{prefix} metrics" + (f" · epoch {epoch}" if epoch is not None else "")
+    table = Table(
+        title=f"🧠 {title}",
+        title_style="bold #8aadf4",
+        box=box.ROUNDED,
+        border_style="#6e738d",
+        header_style="bold #c6a0f6",
+        show_footer=True,
+        footer_style="bold",
+    )
+    avg_key = f"average_{prefix}_metric"
+    avg = metrics.get(avg_key)
+    avg = float(avg) if avg is not None else float("nan")
+    table.add_column("recording", footer="average", style="#cad3f5")
+    table.add_column("task", style="#8bd5ca")
+    table.add_column("metric", style="#6e738d")
+    table.add_column("score", justify="right", footer=Text(f"{avg:.3f}", style=_score_style(avg)))
+    table.add_column("", min_width=22)
+
+    for key, value in metrics.items():
+        if key == avg_key:
+            continue
+        value = float(value)
+        parts = key.split("/")
+        if len(parts) >= 5:
+            recording, task, metric_name = parts[-4], parts[-3], parts[-2]
+        else:
+            recording, task, metric_name = key, "", ""
+        metric_name = metric_name.replace("()", "")
+        n = int(round(max(0.0, min(1.0, value)) * 20))
+        bar = Text("█" * n + "░" * (20 - n), style=_score_style(value))
+        table.add_row(
+            recording,
+            task,
+            metric_name,
+            Text(f"{value:.3f}", style=_score_style(value)),
+            bar,
+        )
+    console.print(table)
+
+
 class DecodingStitchEvaluator(L.Callback):
     r"""A convenient stitching and evaluation framework to use when:
      1. Your model outputs have associated timestamps
@@ -127,7 +189,8 @@ class DecodingStitchEvaluator(L.Callback):
         self.quiet = quiet
 
         if modality_spec.type == DataType.CONTINUOUS:
-            metric_factory = lambda: torchmetrics.R2Score(num_outputs=modality_spec.dim)
+            metric_factory = lambda: torchmetrics.R2Score() 
+            #num_outputs=modality_spec.dim)
         elif modality_spec.type in [DataType.BINARY, DataType.MULTINOMIAL]:
             metric_factory = lambda: torchmetrics.Accuracy(
                 task="multiclass", num_classes=modality_spec.dim
@@ -245,6 +308,7 @@ class MultiTaskDecodingStitchEvaluator(L.Callback):
                 "pred": defaultdict(list),
                 "timestamps": defaultdict(list),
                 "subtask_index": defaultdict(list),
+                "weights": defaultdict(list),
             }
             for _ in range(num_sequences)
         ]
@@ -261,42 +325,57 @@ class MultiTaskDecodingStitchEvaluator(L.Callback):
         absolute_starts = batch.pop("absolute_start")
         session_ids = batch.pop("session_id")
         output_subtask_index = batch.pop("output_subtask_index")
+        # samples with zero weight (e.g. annotated artifacts) are ignored by the metrics
+        target_weights = batch.pop("target_weights", None)
 
-        # forward pass
-        output_values = outputs  # pl_module.model(**batch, unpack_output=True)
+        # The per-sample bookkeeping below involves many tiny indexing operations,
+        # which are much cheaper on the CPU than on an accelerator (where each one
+        # forces a device sync), so move everything over once.
+        def to_cpu(x):
+            return apply_to_collection(x, torch.Tensor, lambda t: t.detach().cpu())
+
+        output_values = to_cpu(outputs)
+        target_values = to_cpu(target_values)
+        output_subtask_index = to_cpu(output_subtask_index)
+        target_weights = to_cpu(target_weights) if target_weights is not None else {}
+        output_decoder_index = batch["output_decoder_index"].detach().cpu()
+        # absolute times are computed in float64 (MPS has no float64, and float32 is
+        # too coarse for absolute times of ~1000s of seconds)
+        output_timestamps = batch["output_timestamps"].detach().cpu().double()
+        absolute_starts = torch.as_tensor(absolute_starts).detach().cpu().double()
 
         # update the cache with the predictions and targets
-        for readout_index in torch.unique(batch["output_decoder_index"]):
+        for readout_index in torch.unique(output_decoder_index):
             if readout_index.item() == 0:
                 # skip the padding token
                 continue
 
-            mask = batch["output_decoder_index"] == readout_index
+            mask = output_decoder_index == readout_index
             readout_id = torch_brain.get_modality_by_id(readout_index.item())
 
             token_sample_idx = torch.where(mask)[0]
+            masked_timestamps = output_timestamps[mask]
 
-            for i in torch.unique(token_sample_idx):
+            for i in torch.unique(token_sample_idx).tolist():
+                sample_mask = token_sample_idx == i
                 pred = output_values[i][readout_id]
-                target = target_values[readout_id][token_sample_idx == i]
-                timestamps = (
-                    batch["output_timestamps"][mask][token_sample_idx == i]
-                    + absolute_starts[i]
-                )
-                subtask_idx = output_subtask_index[readout_id][token_sample_idx == i]
+                target = target_values[readout_id][sample_mask]
+                timestamps = masked_timestamps[sample_mask] + absolute_starts[i]
+                subtask_idx = output_subtask_index[readout_id][sample_mask]
+                if target_weights.get(readout_id) is not None:
+                    weights = target_weights[readout_id][sample_mask].float()
+                else:
+                    weights = torch.ones(len(target))
 
-                self.cache[self.sequence_index[self.sample_ptr]]["pred"][
-                    readout_id
-                ].append(pred.detach().cpu())
-                self.cache[self.sequence_index[self.sample_ptr]]["target"][
-                    readout_id
-                ].append(target.detach().cpu())
-                self.cache[self.sequence_index[self.sample_ptr]]["timestamps"][
-                    readout_id
-                ].append(timestamps.detach().cpu())
-                self.cache[self.sequence_index[self.sample_ptr]]["subtask_index"][
-                    readout_id
-                ].append(subtask_idx.detach().cpu())
+                # Sample i of this batch belongs to its *own* contiguous sequence.
+                # (Previously every sample was appended to the sequence of the first
+                # sample in the batch, mixing up recordings at their boundaries.)
+                cache = self.cache[int(self.sequence_index[self.sample_ptr + i])]
+                cache["pred"][readout_id].append(pred)
+                cache["target"][readout_id].append(target)
+                cache["timestamps"][readout_id].append(timestamps)
+                cache["subtask_index"][readout_id].append(subtask_idx)
+                cache["weights"][readout_id].append(weights)
 
         # update counter then check if the cache should be flushed
         for i in range(len(output_values)):
@@ -313,6 +392,11 @@ class MultiTaskDecodingStitchEvaluator(L.Callback):
             timestamps = torch.cat(self.cache[i]["timestamps"][task_name])
             subtask_index = torch.cat(self.cache[i]["subtask_index"][task_name])
             target = torch.cat(self.cache[i]["target"][task_name])
+            weights = torch.cat(self.cache[i]["weights"][task_name])
+
+            # Round to 0.1 ms so that the same sample, seen from two overlapping
+            # windows, maps to exactly the same timestamp despite float round-off.
+            timestamps = torch.round(timestamps * 1e4) / 1e4
 
             # Pool data wherever timestamps overlap
             stitched_pred = stitch(timestamps, pred)
@@ -320,6 +404,12 @@ class MultiTaskDecodingStitchEvaluator(L.Callback):
 
             if target.dtype == torch.long:
                 stitched_target = torch.round(stitched_target).long()
+
+            # drop the timestamps whose weight is zero (ignored samples)
+            keep = stitch(timestamps, weights.unsqueeze(-1)).squeeze(-1) > 0
+            if not keep.any():
+                continue
+            stitched_pred, stitched_target = stitched_pred[keep], stitched_target[keep]
 
             for metric_name in self.metrics[session_id][task_name].keys():
                 self.metrics[session_id][task_name][metric_name].update(
@@ -364,9 +454,9 @@ class MultiTaskDecodingStitchEvaluator(L.Callback):
             metrics_data.append({"metric": metric_name, "value": metric_value.item()})
 
         metrics_df = pd.DataFrame(metrics_data)
-        rprint(metrics_df)
 
         if trainer.is_global_zero:
+            print_metrics_table(metrics, prefix, epoch=trainer.current_epoch)
             for logger in trainer.loggers:
                 if isinstance(logger, L.pytorch.loggers.TensorBoardLogger):
                     logger.experiment.add_text(
