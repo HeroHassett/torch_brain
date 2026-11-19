@@ -46,6 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - Removed `poyo_mp()` function
 
 ### Fixed
+- Fixed `MemInfo` failing on systems without `/proc/meminfo` (e.g. macOS); it now logs a `psutil` summary there, if `psutil` is installed
 - Fixed `MultiTaskDecodingStitchEvaluator` caching predictions under the wrong sequence index when batch samples have non-overlapping readout types. ([#175](https://github.com/neuro-galaxy/torch_brain/pull/175))
 - Fixed `DistributedEvaluationSamplerWrapper.rank_len()` returning the wrong count when the total number of samples is not evenly divisible by the number of replicas. The condition `(total % num_replicas) < rank` was inverted; it is now correctly `rank < (total % num_replicas)`, matching the strided interleaving used in `__iter__`. ([#217](https://github.com/neuro-galaxy/torch_brain/pull/217))
 

@@ -2,6 +2,7 @@ import logging
 import subprocess
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import torch
 
@@ -101,11 +102,16 @@ class ModelWeightStatsLogger(L.Callback):
 class MemInfo(L.Callback):
     r"""Lightning callback to print the memory information of the system at the
     beginning of the training. This uses the `cat /proc/meminfo` command to get the
-    memory information.
+    memory information. On systems without ``/proc/meminfo`` (e.g. macOS), a summary
+    from ``psutil`` is logged instead, if it is installed.
     """
 
     def on_train_start(self, trainer, pl_module):
         _check_lightning_available(self.__class__)
+        if not Path("/proc/meminfo").exists():
+            logging.info(f"Memory info: {_psutil_memory_summary()}")
+            return
+
         # Log the output of `cat /proc/meminfo` using a shell script.
         try:
             # Execute the command and capture its output
@@ -122,6 +128,19 @@ class MemInfo(L.Callback):
 
         # Log the output
         logging.info(f"Memory info: \n{result}")
+
+
+def _psutil_memory_summary() -> str:
+    try:
+        import psutil
+    except ImportError:
+        return "unavailable (no /proc/meminfo, and psutil is not installed)"
+
+    vm = psutil.virtual_memory()
+    return (
+        f"{vm.total / 2**30:.1f} GiB total, "
+        f"{vm.available / 2**30:.1f} GiB available ({vm.percent}% used)"
+    )
 
 
 @dataclass
