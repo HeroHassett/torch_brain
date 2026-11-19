@@ -1,0 +1,8 @@
+# Extra packages for the terminal demo (on top of `pip install -e ".[dev]"`).
+numpy<2              # torch 2.2 is built against NumPy 1.x
+torchmetrics==1.6.1  # R2Score infers the number of outputs (no num_outputs arg)
+pandas<2.3
+matplotlib<3.10
+tensorboard
+plotext==5.3.2       # braille charts in the terminal (6.x is an incompatible rewrite)
+psutil

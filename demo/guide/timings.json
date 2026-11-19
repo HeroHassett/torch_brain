@@ -1,0 +1,11 @@
+{
+  "PretrainEpochs": "60",
+  "PretrainSteps": "7{,}200",
+  "PretrainHours": "1 h 44 min",
+  "PretrainSkipped": "73",
+  "LiveFinal": "0.27",
+  "LiveMinutes": "3.5",
+  "FinetuneMinutes": "2.5",
+  "FinetuneFrozen": "0.51",
+  "TestsPassed": "48"
+}

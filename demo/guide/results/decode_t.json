@@ -1,0 +1,13 @@
+{
+  "average_r2": 0.7123413681983948,
+  "r2": {
+    "t_20130819_center_out_reaching": 0.7123413681983948
+  },
+  "units": {
+    "t_20130819_center_out_reaching": 55
+  },
+  "windows": 213,
+  "minutes_decoded": 1.8951666666666667,
+  "seconds_elapsed": 1.7307377089746296,
+  "featured": "t_20130819_center_out_reaching"
+}

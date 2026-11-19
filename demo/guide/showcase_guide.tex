@@ -1,0 +1,685 @@
+% POYO+ terminal showcase — run sheet
+% Build:  cd demo/guide && xelatex showcase_guide.tex && xelatex showcase_guide.tex
+\documentclass[11pt]{article}
+
+\usepackage[letterpaper, top=0.75in, bottom=0.8in, left=0.85in, right=0.85in, headheight=15pt]{geometry}
+\usepackage{fontspec}
+\setmainfont{Avenir Next}[BoldFont={* Demi Bold}, ItalicFont={* Italic}, BoldItalicFont={* Demi Bold Italic}]
+\setsansfont{Avenir Next}[BoldFont={* Demi Bold}]
+\setmonofont{FiraCode Nerd Font Mono}[Scale=MatchLowercase, Contextuals=NoAlternate]
+\newfontfamily\symfont{Apple Symbols}[Scale=1.12]
+\newfontfamily\headfont{Avenir Next}[UprightFont={* Demi Bold}, BoldFont={* Heavy}]
+
+\usepackage{xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{multicol}
+\usepackage{microtype}
+\usepackage{needspace}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+
+% ---------------------------------------------------------------- numbers
+% (filled in from the verification runs on this Mac)
+\input{numbers.tex}
+
+% ---------------------------------------------------------------- colours
+% Catppuccin Latte (on paper) + Catppuccin Macchiato (terminal boxes)
+\definecolor{ltext}{HTML}{4C4F69}
+\definecolor{lsub}{HTML}{6C6F85}
+\definecolor{lmauve}{HTML}{8839EF}
+\definecolor{lblue}{HTML}{1E66F5}
+\definecolor{lgreen}{HTML}{40A02B}
+\definecolor{lpeach}{HTML}{FE640B}
+\definecolor{lred}{HTML}{D20F39}
+\definecolor{lyellow}{HTML}{DF8E1D}
+\definecolor{lteal}{HTML}{179299}
+\definecolor{lsurface}{HTML}{CCD0DA}
+\definecolor{lmantle}{HTML}{E6E9EF}
+\definecolor{lbase}{HTML}{EFF1F5}
+\definecolor{mbase}{HTML}{24273A}
+\definecolor{mtext}{HTML}{CAD3F5}
+\definecolor{msurface}{HTML}{494D64}
+\definecolor{mmauve}{HTML}{C6A0F6}
+\color{ltext}
+
+% ---------------------------------------------------------------- headings
+\titleformat{\section}{\headfont\LARGE\color{lmauve}}{\thesection}{0.6em}{}[\vspace{-0.6ex}{\color{lsurface}\titlerule[0.8pt]}]
+\titleformat{\subsection}{\headfont\Large\color{lblue}}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\headfont\large\color{ltext}}{}{0em}{}
+\titlespacing*{\section}{0pt}{2.2ex plus 1ex}{1.4ex}
+\titlespacing*{\subsection}{0pt}{2ex plus 1ex}{0.9ex}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55ex plus 0.2ex}
+\setlist{itemsep=0.25ex, topsep=0.5ex}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{lsub}POYO+ in the terminal · showcase run sheet}
+\fancyhead[R]{\small\color{lsub}\thepage}
+\renewcommand{\headrulewidth}{0pt}
+
+% ---------------------------------------------------------------- keys & code
+\newcommand{\key}[1]{\tcbox[on line, colback=lbase, colframe=lsub!70, boxrule=0.5pt, arc=2.2pt, left=2.6pt, right=2.6pt, top=0.7pt, bottom=0.7pt, boxsep=0pt]{\small\strut #1}}
+\newcommand{\CMD}{{\symfont ⌘}}
+\newcommand{\SHIFT}{{\symfont ⇧}}
+\newcommand{\OPT}{{\symfont ⌥}}
+\newcommand{\CTRL}{{\symfont ⌃}}
+\newcommand{\RET}{{\symfont ⏎}}
+\newcommand{\UP}{{\symfont ↑}}
+\newcommand{\DOWN}{{\symfont ↓}}
+\newcommand{\LEFT}{{\symfont ←}}
+\newcommand{\RIGHT}{{\symfont →}}
+\newcommand{\TAB}{{\symfont ⇥}}
+\newcommand{\arr}{{\symfont →}}
+\newfontfamily\dingfont{Zapf Dingbats}
+\newcommand{\checkmark}{{\dingfont ✔}}
+\newcommand{\Return}{\key{\RET\,return}}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\file}[1]{\textcolor{lteal}{\nolinkurl{#1}}}
+
+\newtcblisting{term}[1][]{listing only, enhanced, colback=mbase, colframe=msurface, boxrule=0.6pt, arc=4pt,
+  left=9pt, right=8pt, top=4pt, bottom=4pt, before skip=0.8ex, after skip=1.0ex,
+  listing engine=listings,
+  listing options={basicstyle=\ttfamily\small\color{mtext}, columns=fullflexible, keepspaces=true,
+    breaklines=true, upquote=true, showstringspaces=false},
+  overlay={\node[anchor=north east, font=\tiny\ttfamily, text=mmauve, inner sep=3pt] at (frame.north east) {fish};},
+  #1}
+
+\newtcolorbox{say}{enhanced, colback=lmauve!5, colframe=lmauve!60, boxrule=0pt, leftrule=3pt, arc=0pt,
+  left=8pt, right=6pt, top=4pt, bottom=4pt, before skip=1ex, after skip=1ex,
+  fontupper=\itshape\color{ltext}, title={\upshape\bfseries\small SAY}, attach title to upper={\ \ },
+  coltitle=lmauve}
+\newtcolorbox{tip}[1][Tip]{enhanced, colback=lgreen!6, colframe=lgreen!70, boxrule=0pt, leftrule=3pt, arc=0pt,
+  left=8pt, right=6pt, top=4pt, bottom=4pt, before skip=1ex, after skip=1ex,
+  title={\bfseries\small #1}, attach title to upper={\ \ }, coltitle=lgreen}
+\newtcolorbox{warn}[1][Heads-up]{enhanced, colback=lpeach!6, colframe=lpeach!80, boxrule=0pt, leftrule=3pt, arc=0pt,
+  left=8pt, right=6pt, top=4pt, bottom=4pt, before skip=1ex, after skip=1ex,
+  title={\bfseries\small #1}, attach title to upper={\ \ }, coltitle=lpeach}
+\newtcolorbox{sees}{enhanced, colback=lblue!4, colframe=lblue!60, boxrule=0pt, leftrule=3pt, arc=0pt,
+  left=8pt, right=6pt, top=4pt, bottom=4pt, before skip=1ex, after skip=1ex,
+  title={\bfseries\small WHAT THE AUDIENCE SEES}, attach title to upper={\\[0.3ex]}, coltitle=lblue}
+
+% act header: number, title, duration
+\newcommand{\act}[3]{%
+  \clearpage
+  \begin{tcolorbox}[enhanced, colback=mbase, colframe=mbase, arc=5pt, left=12pt, right=12pt, top=8pt, bottom=8pt]
+    {\headfont\color{mmauve}\large ACT #1}\hfill{\small\color{mtext}#3}\\[0.3ex]
+    {\headfont\color{mtext}\huge #2}
+  \end{tcolorbox}
+  \addcontentsline{toc}{section}{Act #1 · #2}%
+}
+
+\newcommand{\shot}[2][0.95]{%
+  \IfFileExists{#2}{\begin{center}\includegraphics[width=#1\linewidth, height=0.80\textheight, keepaspectratio]{#2}\end{center}}{%
+  \begin{center}\color{lred}[missing image: \detokenize{#2}]\end{center}}}
+
+\begin{document}
+
+% ================================================================= cover
+\thispagestyle{empty}
+\begin{tcolorbox}[enhanced, colback=mbase, colframe=mbase, arc=6pt, left=18pt, right=18pt, top=16pt, bottom=16pt]
+  {\headfont\color{mmauve}\small TORCH\_BRAIN · TERMINAL SHOWCASE}\\[1.2ex]
+  {\headfont\color{mtext}\fontsize{34}{38}\selectfont POYO+ in the terminal}\\[1.4ex]
+  {\color{mtext}\Large A keystroke-by-keystroke run sheet for demoing a transformer that decodes
+  monkey motor-cortex spikes into hand movements, live on your M1 Max, in your iTerm2.}
+\end{tcolorbox}
+
+\vspace{1ex}
+\shot[1.0]{img/act1_banner.pdf}
+
+\begin{tcolorbox}[enhanced, colback=lbase, colframe=lsurface, arc=4pt, left=10pt, right=10pt]
+\textbf{The 10-second version.} Open iTerm2 \arr{} \code{z torch} \arr{} \code{conda activate torch_brain}
+\arr{} \code{zsh demo/showcase.sh} and press \Return{} between acts. Everything below explains each act in
+detail, what to type, what to say, and which terminal tricks to show off along the way.
+\end{tcolorbox}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\linewidth}{>{\bfseries\color{lmauve}}l X >{\color{lsub}}r}
+\toprule
+\textcolor{ltext}{Act} & \textbf{What happens} & \textcolor{ltext}{\textbf{Time}} \\
+\midrule
+0 & Set the stage: fastfetch, zoxide, starship prompt, conda, eza, git, glow & 3 min \\
+1 & Meet the data: 111 recordings, a truecolour spike heatmap, spikes \arr{} tokens & 1 min \\
+2 & Inside POYO+: architecture tree, a real forward pass, speed benchmark & 2 min \\
+3 & Train POYO+ live from scratch (split pane + GPU monitor) & \LiveMinutes{} min \\
+4 & Decode every held-out trial with the pretrained model (R² \PretrainAvg) & 1 min \\
+5 & Live brain-computer-interface replay, drawn in braille & 1 min \\
+6 & Transfer to monkey T, an animal the model has never seen & \FinetuneMinutes{} min \\
+7 & Decode monkey T + live BCI on monkey T (R² \MonkeyTAvg) & 2 min \\
+8 & Encore: tests, TensorBoard, lazygit, nvim, iTerm2 Instant Replay & 2--5 min \\
+\bottomrule
+\end{tabularx}
+\end{center}
+{\small\color{lsub} Full show $\approx$ 20--25 minutes. Short show (skip Acts 3 and 6, which train models live): $\approx$ 10 minutes.}
+
+\clearpage
+\tableofcontents
+
+% ================================================================= what is included
+\section{What's in this demo}
+
+Everything needed for the demo is installed, trained and tested on this Mac
+(Apple M1 Max, 64 GB, macOS). Nothing needs to be downloaded on show day.
+
+\subsection*{Software}
+\begin{itemize}
+\item \textbf{Python environment:} the existing conda env \code{torch_brain} (Python 3.11) now contains
+  \code{torch_brain} (installed in editable mode, \code{pip install -e ".[dev]"}) with the versions pinned in
+  \file{setup.py}: PyTorch 2.2.0 (with Apple-GPU/MPS support), Lightning 2.3.3, Hydra 1.3, temporaldata 0.1.1, plus
+  the demo extras in \file{demo/requirements.txt} (torchmetrics 1.6.1, NumPy 1.23, TensorBoard, plotext 5.3.2, \dots).
+\item \textbf{Homebrew tools added for the show:} \code{fastfetch} (system splash), \code{btop} (resource monitor),
+  \code{macmon} (Apple-Silicon CPU/GPU/power monitor, no sudo needed), \code{glow} (Markdown in the terminal).
+  Already present and used: \code{bat}, \code{eza}, \code{fzf}, \code{zoxide}, \code{starship}, \code{lazygit}, \code{nvim}.
+\item \textbf{Your shell:} the Research iTerm2 profile starts \textbf{fish} with your Terminal-Coding-Configs setup
+  (starship prompt, zoxide, fzf, eza abbreviations), not zsh. Every command in this guide was tested in that shell.
+  zoxide already knows the repo, so \code{z torch} jumps to it from anywhere.
+\end{itemize}
+
+\subsection*{Data and models}
+\begin{itemize}
+\item \textbf{Data:} your \file{data/processed/perich_miller_population_2018} (111 sessions, 2.84 GB) was already processed
+  by brainsets and is used as-is.
+\item \textbf{Pretrained model:} \file{demo/checkpoints/poyo_plus_demo.ckpt}, a 5.2 M-parameter POYO+ trained for
+  \PretrainEpochs{} epochs (\PretrainSteps{} steps, \PretrainHours) on the Apple GPU, on 12 recordings from monkeys C, M and J.
+  Average held-out R² = \textbf{\PretrainAvg}.
+\item \textbf{Monkey-T model:} \file{demo/checkpoints/poyo_plus_monkey_t.ckpt}, the pretrained model transferred to a
+  session of monkey T (never seen during pretraining). Held-out R² = \textbf{\MonkeyTAvg}.
+  Act 6 re-creates it live; this copy is the safety net.
+\end{itemize}
+
+\subsection*{Code fixes and improvements}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{4.3cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Where} & \textbf{What changed and why} \\
+\midrule
+\file{train.py} & Default config pointed to a non-existent \code{train.yaml} (now \code{train_poyo_mp}); device is chosen
+  automatically (CUDA \arr{} Apple GPU \arr{} CPU); TensorBoard logging when W\&B is off; optional
+  Rich progress bars; gradient clipping + skip of non-finite steps; iTerm2 notification when training ends. \\
+\file{torch_brain/models/poyo_plus.py} & Timestamps are emitted as float32: Apple GPUs (MPS) cannot hold float64 tensors, so
+  training on the GPU crashed. \\
+\file{torch_brain/nn/embedding.py}, \file{infinite_vocab_embedding.py} & MPS-only, mathematically identical embedding
+  paths. Padding tokens all scattered their gradients into one row and serialised on the GPU (0.6 s of a 1 s step).
+  Training steps are now $\sim$1.7$\times$ faster. \\
+\file{torch_brain/optim.py} & Sync-free \code{Lamb} (same maths as \code{torch_optimizer.Lamb}, verified to 1e-8):
+  removes 2--3 GPU$\to$CPU syncs per parameter per step. \\
+\file{torch_brain/utils/stitcher.py} & \textbf{Bug fix:} every window of a validation batch was credited to the
+  \emph{first} sequence of the batch, mixing recordings in the per-session R². Also: CPU bookkeeping (much faster
+  validation), float64 time stitching, Rich R² table. \\
+\file{torch_brain/nn/multitask_readout.py} & New \code{ignore_intervals} option: annotated cursor-tracking glitches
+  (up to 1300 cm/s!) are ignored by loss and metrics. This doubled R² for the same compute and removed NaN blow-ups.
+  Faster \code{unpack_output}. \\
+\file{finetune.py} (new, root) & Working version of the broken \file{examples/poyo_plus/finetune.py}
+  (imported a non-existent \code{StitchEvaluator}). \\
+\file{tests/} & Two new test files (8 tests); the full suite passes (\TestsPassed{} passed). \\
+\bottomrule
+\end{tabularx}
+
+\subsection*{New files}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}X}
+\toprule
+\file{demo/01_explore_data.py} & Act 1 · data tour \\
+\file{demo/02_model_tour.py} & Act 2 · architecture + forward pass + benchmark \\
+\file{demo/03_decode.py} & Acts 4/7 · decode held-out trials, R² table, braille chart, figure \\
+\file{demo/04_live_bci.py} & Acts 5/7 · live BCI replay \\
+\file{demo/showcase.sh} & autopilot: runs every act, waits for \key{\RET} \\
+\file{demo/check_setup.py} & preflight checklist \\
+\file{demo/README.md}, \file{demo/setup_env.sh} & overview (rendered with glow) · env re-creation \\
+\file{configs/demo_*.yaml}, \file{configs/model/poyo_demo.yaml}, \file{configs/dataset/demo_*.yaml} & Hydra configs for the demo \\
+\file{torch_brain/utils/terminal.py} & iTerm2 inline images, notifications, fireworks, badges, tab colours \\
+\bottomrule
+\end{tabularx}
+
+% ================================================================= before the show
+\section{Before the show (T--15 minutes)}
+
+\subsection{Prepare the machine}
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Plug in the charger.} Training is GPU-heavy; on battery macOS may throttle it.
+\item \textbf{Quit GPU-hungry apps} (games, video editors, many Chrome tabs, Docker). They slow the live training acts.
+\item \textbf{Notifications.} iTerm2 is set to post a macOS notification when training finishes. Make sure
+  \emph{System Settings \arr{} Notifications \arr{} iTerm2 \arr{} Allow Notifications}
+  is on, and that a Focus/Do-Not-Disturb mode is \emph{off} (or the banner will be silenced).
+  The fireworks and the tab colours work regardless.
+\end{enumerate}
+
+\subsection{Open and size iTerm2}
+\begin{enumerate}[leftmargin=*]
+\item Press \key{\CMD\,space}, type \code{iTerm}, press \Return. Your default profile is \textbf{Research}
+  (fish, Iosevka Nerd Font 14 pt, Catppuccin Macchiato colours); all demo output is themed to match it.
+\item Press \key{\CMD\,\RET} to go full screen (press it again to leave).
+\item Adjust the font for the room with \key{\CMD\,+} / \key{\CMD\,--} (\key{\CMD\,0} resets). The live BCI act
+  needs at least $\sim$\textbf{115 columns $\times$ 42 rows}. Check with:
+\end{enumerate}
+\begin{term}
+tput cols; tput lines
+\end{term}
+
+\needspace{9\baselineskip}
+\subsection{Run the preflight check}
+Type each line and press \Return{} after it:
+\begin{term}
+z torch
+conda activate torch_brain
+python demo/check_setup.py
+\end{term}
+Every \emph{required} row must show a green \textbf{\checkmark}. Optional rows (yellow \textbf{!}) only disable eye candy.
+The iTerm2 row must be green when you run it inside iTerm2.
+
+\begin{tip}[Rehearse once]
+Before the audience arrives, type each act's command yourself once (or at least the acts you plan to show). That warms
+the GPU and file caches, and it puts every command into fish's history, so during the show fish offers the rest
+of each command in grey after a couple of letters. Press \key{\RIGHT} to accept it.
+That looks slick and avoids typos. \key{\CMD\,R} (or \key{\CTRL\,R}) opens fzf history search to find them instantly.
+(Commands run by the autopilot script do not go into your history.)
+\end{tip}
+
+Finally type \code{cd} \Return{} to go back to your home folder (fish's \code{cd} with no argument goes home), then
+press \key{\CMD\,K} to clear the screen. You are ready.
+
+\begin{warn}[Start Act 0 from outside the repo]
+\code{z torch} skips the folder you are already in. Typed inside the repo root, it jumps to the next match instead: the
+package folder \file{torch_brain/torch_brain}, where \code{python demo/...} commands fail with ``No such file''. That's
+why you go home first. If it happens anyway, type \code{cd ..} \Return.
+\end{warn}
+
+% ================================================================= act 0
+\act{0}{Set the stage}{3 min}
+
+\begin{say}
+This is my terminal: iTerm2 running fish, with a starship prompt, zoxide, fzf and a few modern CLI tools. Everything you will
+see today, including training a neural network on monkey brain recordings, runs right here.
+\end{say}
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{System splash.} Type \code{fastfetch} \Return. It shows the Apple logo, macOS, the M1 Max chip and GPU,
+  memory, the shell, terminal and font.
+\item \textbf{Jump to the project with zoxide.} Type \code{z torch} \Return. The blue directory segment of the prompt
+  changes to \code{~/Documents/GitHub/torch_brain}, and a mauve git segment appears with the current branch
+  (\code{poyo-terminal-demo}) and file counts such as \code{new:1}. The teal segment shows the Research project,
+  and the right side shows a green \textbf{\checkmark} for the last command's exit status.
+\item \textbf{Activate the environment.} Type \code{conda activate torch_brain} \Return. The prompt gains a
+  green segment that names the environment.
+\begin{tip}[fish syntax highlighting]
+While typing, watch the command word: it is red while it isn't a valid command and turns blue once it is. Type
+\code{cond} slowly (red), then finish \code{conda} (blue).
+\end{tip}
+\item \textbf{Look around with eza.} Your Research config has abbreviations that expand as you type:
+\begin{term}
+ll
+tree --git-ignore demo
+\end{term}
+  Type \code{ll} and press \key{space}: fish expands it in place to the full \code{eza} command (long listing with a
+  header, a git-status column, directories first). Press \Return{} to run it. \code{tree} expands the same way to a two-level eza tree;
+  \code{--git-ignore} hides cache folders.
+\item \textbf{The work behind this demo, in git:}
+\begin{term}
+git log --oneline -4
+\end{term}
+  Three commits on top of the original code: the Apple-GPU and evaluation fixes, training scripts at the repo root, and
+  this demo with its run sheet.
+\item \textbf{Read the project overview, rendered in the terminal:}
+\begin{term}
+glow -p demo/README.md
+\end{term}
+  It scrolls in a pager: \key{space} next page, \key{b} back, \key{q} quit. (Drop \code{-p} to print it all at once.)
+\end{enumerate}
+
+\begin{say}
+POYO+ is a transformer for neuroscience. It treats every single spike as a token, so recordings with different
+neurons, or even different animals, can all feed the same network.
+\end{say}
+
+% ================================================================= act 1
+\act{1}{Meet the data}{1 min}
+
+\begin{term}
+python demo/01_explore_data.py
+\end{term}
+{\small\color{lsub}Runtime $\approx$ 6 s. Add \code{--fast} to skip the scan of all 111 files.}
+
+\begin{sees}
+\begin{enumerate}[leftmargin=*, nosep]
+\item The \textbf{POYO+ banner} in a Catppuccin gradient. iTerm2 also shows a translucent \textbf{badge} (``POYO+ / ACT 1'')
+  in the corner of the pane.
+\item A spinner and progress bar while all \textbf{111 recordings} are scanned, then a table: 4 monkeys,
+  111.4 M spikes, 43 hours of recordings, 2.84 GB on disk. Monkey T is marked \emph{held out}.
+\item The dataset description and its DANDI link (\key{\CMD}-click it to open the archive in the browser).
+\item \textbf{Live from motor cortex:} a truecolour heatmap of the 22 most active neurons over 10 seconds, drawn
+  entirely with coloured text characters.
+\item \textbf{Spikes \arr{} tokens:} the first spike tokens of a 1-second window (neuron id, time), and the token budget:
+  $\sim$600 spike tokens \arr{} 128 latents \arr{} 100 velocity outputs.
+\item A high-resolution figure \textbf{inline in the terminal} (iTerm2 inline images): spike raster, cursor
+  velocity and the beautiful 8-direction ``flower'' of every reach in the session.
+\end{enumerate}
+\end{sees}
+
+\begin{say}
+Four monkeys were trained to move a cursor to targets while the Miller lab recorded from up to a few hundred neurons in motor
+cortex. The goal is to read those spikes and predict the hand's velocity in real time.
+\end{say}
+
+
+\begin{tip}[iTerm2 marks]
+Every act drops an iTerm2 \emph{mark}. Later, \key{\CMD\,\SHIFT\,\UP} / \key{\CMD\,\SHIFT\,\DOWN} jump back and forth between
+them, which is handy to scroll back to the heatmap or a figure while answering questions.
+\end{tip}
+
+\shot[0.55]{img/act1.pdf}
+\shot[1.0]{img/fig_01_data_overview.png}
+
+% ================================================================= act 2
+\act{2}{Inside POYO+}{2 min}
+
+First show the heart of the model's code, syntax-highlighted in your theme:
+\begin{term}
+bat --theme="Catppuccin Macchiato" -r 199:245 torch_brain/models/poyo_plus.py
+\end{term}
+{\small\color{lsub}These 47 lines are the whole forward pass: embed spikes \arr{} \code{# encode} (cross-attention)
+\arr{} \code{# process} (self-attention) \arr{} \code{# decode} \arr{} readout. If bat opens a pager, press \key{q}.}
+
+Then run the tour:
+\begin{term}
+python demo/02_model_tour.py
+\end{term}
+{\small\color{lsub}Runtime $\approx$ 10 s.}
+
+\begin{sees}
+\begin{enumerate}[leftmargin=*, nosep]
+\item \textbf{Architecture tree} with parameter counts: input tokens (unit embedding for 801 neurons, token types,
+  rotary time), encoder, 6-layer processor, decoder (session + task embeddings), multitask readout.
+\item \textbf{A real batch through the network:} 8 random one-second windows from the 12 recordings, and the tensor
+  shape at each stage (padded spike tokens \arr{} 128 latents \arr{} 100 queries \arr{} (v\textsubscript{x}, v\textsubscript{y})).
+\item \textbf{Speed:} 8 seconds of brain activity decoded in a few milliseconds on the GPU, and on the CPU for
+  comparison: hundreds of times faster than real time.
+\end{enumerate}
+\end{sees}
+
+\begin{say}
+No binning, no fixed channel order. Each neuron gets a learned embedding, and a fixed set of latent tokens
+summarises the population every 125 ms. That's why the same model works across sessions and animals.
+\end{say}
+
+\shot[0.7]{img/act2.pdf}
+
+% ================================================================= act 3
+\act{3}{Train POYO+ live, from scratch}{\LiveMinutes{} min}
+
+This act trains a fresh POYO+ on two recordings while the audience watches the GPU work.
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Split the window:} press \key{\CMD\,D}. A second pane opens on the right.
+\item \textbf{GPU monitor in the right pane:} type \code{macmon} \Return. It shows live CPU/GPU utilisation,
+  frequency, power and RAM of the M1 Max. (Alternative: \code{btop}.)
+\item \textbf{Back to the left pane:} press \key{\CMD\,[} (or \key{\CMD\,\OPT\,\LEFT}).
+\item \textbf{Start training:}
+\begin{term}
+python train.py --config-name demo_live
+\end{term}
+\end{enumerate}
+
+\begin{sees}
+\begin{enumerate}[leftmargin=*, nosep]
+\item The iTerm2 \textbf{tab turns yellow} (training in progress) and a Rich \textbf{model summary} table appears.
+\item A colourful \textbf{progress bar} per epoch with the running \code{train_loss}. In the right pane the
+  \textbf{GPU jumps to $\sim$90--100\%}.
+\item After every epoch an \textbf{R² table} for the two held-out recordings, green/yellow/red bars that grow from
+  $\approx$0 to $\approx$\LiveFinal{} after 8 epochs.
+\item At the end the tab turns \textbf{green}, a macOS notification ``POYO+ finished training'' appears, and
+  iTerm2 plays \textbf{fireworks} at the cursor. The right side of the prompt shows how long the command took
+(e.g.\ \code{took 3m29s}) next to a green \textbf{\checkmark} (shown when the window is at least 120 columns wide).
+\end{enumerate}
+\end{sees}
+
+\begin{say}
+Every spike in a one-second window is a token. The loss is the error on hand velocity. Watch R² climb: it's
+learning which neurons care about which direction, from scratch, in a few minutes on a laptop.
+\end{say}
+
+\begin{tip}[Hydra overrides: change anything from the command line]
+Shorter run: \code{python train.py --config-name demo_live epochs=4}. Smaller model:
+\code{model.depth=2}. CPU instead of GPU: \code{accelerator=cpu} (great for showing why the GPU matters).
+\end{tip}
+
+When it's done: press \key{\CMD\,]} to go to the right pane, \key{q} to quit macmon, then type \code{exit} \Return{}
+to close the pane.
+
+\begin{warn}
+Don't press \key{\CTRL\,C} during the first seconds of training unless you mean it. It stops the run cleanly
+(Lightning saves a checkpoint), but the act is over. The pretrained model used next does not depend on this run.
+\end{warn}
+
+% ================================================================= act 4
+\act{4}{Decode held-out trials}{1 min}
+
+\begin{term}
+python demo/03_decode.py
+\end{term}
+{\small\color{lsub}Runtime $\approx$ \DecodeSeconds{} s. Uses \file{demo/checkpoints/poyo_plus_demo.ckpt}.}
+
+\begin{sees}
+\begin{enumerate}[leftmargin=*, nosep]
+\item A progress bar while every held-out test trial of all 12 recordings is cut into overlapping 1-second windows
+  and decoded (\DecodeWindows{} windows, \DecodeMinutes{} minutes of neural data).
+\item \textbf{The R² leaderboard:} one row per recording (monkeys C, M, J; center-out and random-target tasks), sorted,
+  with coloured bars. \textbf{Average R² = \PretrainAvg}; best \PretrainBest.
+\item \textbf{A chart drawn in braille characters right in the terminal}: true vs decoded horizontal velocity
+  for four back-to-back test trials.
+\item \textbf{An inline figure:} velocity traces (green = real, purple = POYO+) and, on the right, the reach
+  trajectories rebuilt by integrating the decoded velocity: the ``flower'' again, now \emph{from brain activity alone}.
+\end{enumerate}
+\end{sees}
+
+\begin{say}
+These trials were never seen in training. Overlapping windows are stitched back together and scored with R²,
+where 1.0 is perfect and 0 is just guessing the average. On the right, solid lines are the reaches the model
+reconstructs from spikes; dashed lines are what the monkey actually did.
+\end{say}
+
+\shot[0.78]{img/act4.pdf}
+\shot[0.9]{img/fig_03_decoding.png}
+
+% ================================================================= act 5
+\act{5}{Live brain-computer interface}{1 min}
+
+\begin{term}
+python demo/04_live_bci.py
+\end{term}
+{\small\color{lsub}Runtime $\approx$ 40 s (8 trials in real time). Options: \code{--trials 4}, \code{--speed 0.5}
+(slow motion), \code{--session c_20150701}.}
+
+\begin{sees}
+Held-out reaches are replayed \textbf{in real time}. Every 50 ms POYO+ reads only the \emph{previous} second of spikes
+(causal decoding, like a real BCI) and moves the \textbf{purple} cursor; the \textbf{green} cursor is the monkey's real
+hand. The canvas is drawn with braille dots (2$\times$4 pixels per character); the target lights up in its colour.
+On the right: trial, target direction, phase (hold/REACH), population firing rate, true vs decoded speed and a
+running R², plus a scrolling activity heatmap of the 24 most active neurons. At the end: the causal R² over all
+replayed trials (\BCIRtwo).
+\end{sees}
+
+\begin{say}
+This is what a brain-computer interface does: no hand needed. The purple cursor is driven purely by neurons firing,
+decoded by a transformer, 20 times per second.
+\end{say}
+
+\begin{tip}[iTerm2 Instant Replay]
+After the animation finishes, press \key{\CMD\,\OPT\,B}. iTerm2's \emph{Instant Replay} lets you scrub back in time
+with \key{\LEFT}/\key{\RIGHT} and replay the animation frame by frame. Press \key{esc} to return.
+\end{tip}
+
+\shot[0.85]{img/act5.pdf}
+
+% ================================================================= act 6
+\act{6}{Transfer to a never-seen monkey}{\FinetuneMinutes{} min}
+
+\begin{term}
+python finetune.py --config-name demo_finetune
+\end{term}
+
+\begin{sees}
+\begin{enumerate}[leftmargin=*, nosep]
+\item The pretrained weights are loaded and \textbf{55 brand-new neurons} from monkey T get fresh embeddings.
+\item Epochs 0--5: log line ``POYO+ Perceiver frozen'': only the new neuron and session embeddings learn
+  (\emph{unit identification}). R² climbs from 0 to $\approx$\FinetuneFrozen{} although the transformer itself
+  is untouched: the pretrained network already ``speaks motor cortex''; it only has to learn who is who.
+\item Epoch 6: ``Perceiver unfrozen'': everything is fine-tuned and R² climbs further, to $\approx$\MonkeyTAvg{}
+  after 16 epochs (a small dip right after unfreezing is normal).
+\item The final model is copied to \file{demo/checkpoints/poyo_plus_monkey_t.ckpt}; tab turns green, notification,
+  fireworks.
+\end{enumerate}
+\end{sees}
+
+\begin{say}
+Monkey T was never seen during pretraining: different animal, different electrodes, different neurons. We freeze the
+network and only learn ``who is who'' among the new neurons. A few minutes later we can decode this new brain.
+That's the promise of foundation models for neuroscience.
+\end{say}
+
+\begin{tip}[Short on time?]
+Skip this act. The monkey-T checkpoint already exists, so Act 7 works without it.
+\end{tip}
+
+% ================================================================= act 7
+\act{7}{Decode monkey T}{2 min}
+
+\begin{term}
+python demo/03_decode.py --monkey-t
+python demo/04_live_bci.py --monkey-t
+\end{term}
+
+\begin{sees}
+The same R² table and figures as Act 4, now for monkey T's held-out trials (\textbf{R² = \MonkeyTAvg}), and the
+live BCI replay on the new animal.
+\end{sees}
+
+\shot[0.9]{img/fig_05_monkey_t_decoding.png}
+\shot[0.8]{img/act7_bci.pdf}
+
+% ================================================================= act 8
+\act{8}{Encore}{2--5 min}
+
+Pick whatever fits your audience.
+
+\subsubsection*{The test suite}
+\begin{term}
+python -m pytest tests/test_poyo_plus.py tests/test_apple_silicon.py -v -W ignore -p no:cacheprovider
+\end{term}
+Green \code{PASSED} lines, including the new tests proving the Apple-GPU code paths are mathematically identical to
+the originals. (Whole suite: \code{python -m pytest -q -W ignore}.)
+
+\subsubsection*{TensorBoard dashboard}
+\begin{term}
+tensorboard --logdir demo/runs
+\end{term}
+\key{\CMD}-click the printed \code{http://localhost:6006/} link. It shows loss curves, learning rate, R² per recording,
+gradient norms, and the pretraining run plus Acts 3 and 6. Stop the server with \key{\CTRL\,C}.
+
+\subsubsection*{Browse the code changes}
+\begin{itemize}[leftmargin=*]
+\item \code{lg} (your abbreviation for \code{lazygit}): \key{\UP}/\key{\DOWN} select a file, its diff appears on the right; \key{q} quits.
+\item \code{nvim torch_brain/models/poyo_plus.py}: search with \code{/class POYOPlus} \Return, quit with \code{:q} \Return.
+\item \code{bat --diff torch_brain/utils/stitcher.py}: only the lines changed for the demo (including the stitching
+  bug fix), with git markers in the gutter.
+\end{itemize}
+
+\subsubsection*{iTerm2 and fish tricks worth showing}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}X}
+\toprule
+\key{\CMD\,\SHIFT\,\UP} / \key{\CMD\,\SHIFT\,\DOWN} & jump between command marks (every act sets one) \\
+\key{\CMD\,\OPT\,B} & Instant Replay: scrub back in time through the terminal's output \\
+\key{\CMD\,\SHIFT\,H} & paste history \\
+\key{\CMD\,;} & autocomplete from words already on screen \\
+\key{\CMD\,F} / \key{\CMD\,/} & find in output / find the cursor \\
+\key{\CMD\,D}, \key{\CMD\,\SHIFT\,D}, \key{\CMD\,\SHIFT\,\RET} & split vertically, split horizontally, maximise the current pane \\
+\key{\CMD}-click & open a URL printed in the terminal (e.g.\ TensorBoard's link) \\
+\key{\CMD\,R} or \key{\CTRL\,R} & fzf fuzzy history search (type \code{decode}, \key{\RET}) \\
+\key{\CMD\,P} or \key{\CTRL\,T} & fzf file picker with a bat preview; e.g.\ type \code{bat} and a space, press \key{\CMD\,P}, pick a file, \key{\RET} \\
+\key{\RIGHT} & accept fish's grey autosuggestion \\
+\code{z torch}, \code{zi} & zoxide: jump to a remembered directory / pick one interactively with fzf \\
+\code{ll}, \code{la}, \code{tree}, \code{lg} & abbreviations that expand in place when you press \key{space} \\
+\bottomrule
+\end{tabularx}
+
+% ================================================================= autopilot
+\section{Autopilot mode}
+
+The script \file{demo/showcase.sh} runs every act in order. Before each act it prints the act's title and the exact
+command, then waits for \key{\RET}.
+\begin{term}
+zsh demo/showcase.sh
+zsh demo/showcase.sh 4
+SKIP_TRAIN=1 zsh demo/showcase.sh
+\end{term}
+The first runs everything; the second starts at Act 4; the third skips the two acts that train models live
+(3 and 6). The script is written for zsh, which is why each line starts with \code{zsh}; type them in your fish
+shell exactly as shown. Press \key{\CTRL\,C} at any prompt to stop.
+
+% ================================================================= troubleshooting
+\clearpage
+\section{Troubleshooting}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{4.6cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Symptom} & \textbf{Fix} \\
+\midrule
+\code{can't open file} with a path containing \file{torch_brain/torch_brain/demo} & You are in the package folder, one level too deep (\code{z torch} typed from inside the repo root skips the root). Type \code{cd ..} \Return. \\
+\code{z torch} goes to some other folder & Run \code{cd ~/Documents/GitHub/torch_brain} once; zoxide learns every directory you \code{cd} into and ranks the ones you use most. \\
+\code{fish: Unknown command} for a zsh habit (\code{j}, \code{gst}, \dots) & The Research shell is fish with its own config: use \code{z} for jumping, \code{git status} for git, \code{ll} for listings. \\
+\code{ModuleNotFoundError} or wrong Python & The env isn't active: \code{conda activate torch_brain}. Check with \code{which python}. \\
+Figures print ``saved to \dots'' instead of appearing & You are not in iTerm2 (e.g. VS Code's terminal or plain tmux). Open the file with the printed \code{open ...} command, or run in iTerm2. \\
+The live BCI frame flickers or wraps & Window too small: go full screen (\key{\CMD\,\RET}), reduce the font (\key{\CMD\,--}), or maximise the pane (\key{\CMD\,\SHIFT\,\RET}). \\
+Training is much slower than expected & Another job is using the GPU (check macmon). Kill leftovers with \code{pkill -f train.py}. Plug in the charger. \\
+No notification at the end of training & macOS notification permission for iTerm2 or a Focus mode (see ``Before the show''). Fireworks still play. \\
+\code{FileNotFoundError} for \file{poyo_plus_monkey_t.ckpt} & Run Act 6 once: \code{python finetune.py --config-name demo_finetune}. \\
+Pretrained checkpoint lost & Re-train it (\PretrainHours{} on the M1 Max): \code{python train.py --config-name demo_pretrain}, then copy \file{demo/runs/poyo_plus_demo_pretrain/version_*/checkpoints/last.ckpt} to \file{demo/checkpoints/poyo_plus_demo.ckpt}. \\
+Environment broken & Re-create it: \code{zsh demo/setup_env.sh}. \\
+Tab stays green / badge stays on after the show & Run the reset command shown below the table (the autopilot does it automatically at the end). \\
+Anything else & \key{\CTRL\,C} stops any act safely. Re-run the preflight: \code{python demo/check_setup.py}. \\
+\bottomrule
+\end{tabularx}
+
+Reset the iTerm2 tab colour and badge:
+\begin{term}
+printf '\e]6;1;bg;*;default\a\e]1337;SetBadgeFormat=\a'
+\end{term}
+
+% ================================================================= appendix
+\clearpage
+\section{Appendix: the numbers behind the demo}
+
+\subsection*{Pretrained model: held-out R² per recording}
+\input{r2_table.tex}
+
+\subsection*{Training recipe}
+\begin{itemize}
+\item \textbf{Model:} POYO+ \code{dim=128}, 6 self-attention layers, 16 latents per 125 ms, 2/8 cross/self heads, 5.2 M parameters.
+\item \textbf{Optimiser:} LAMB, learning rate $3.125\times10^{-5}\times$ batch size, one-cycle cosine schedule,
+  weight decay $10^{-4}$, gradient clipping at norm 1.
+\item \textbf{Data:} 1-second windows, unit-dropout augmentation, cursor velocity z-scored with
+  $\sigma = (5.66, 6.06)$ cm/s; annotated cursor-tracking artifacts ignored.
+\item \textbf{Hardware:} Apple M1 Max GPU via PyTorch MPS; batch 64; \PretrainHours{} for \PretrainEpochs{} epochs.
+\item \textbf{Known quirk:} right after each validation pass, PyTorch 2.2's MPS backend occasionally produces non-finite
+  gradients in the encoder cross-attention (stale GPU buffers). Those steps are detected and skipped
+  (\PretrainSkipped{} of \PretrainSteps{} during pretraining, $\approx$1\%), and the GPU cache is now released after
+  validation.
+\item \textbf{Monkey-T transfer:} 16 epochs, batch 32, LAMB at 10$\times$ the pretraining learning rate (new neuron
+  embeddings start tiny and need bigger steps), transformer frozen for the first 6 epochs.
+\end{itemize}
+
+\subsection*{References}
+\begin{itemize}
+\item Azabou et al., \emph{A Unified, Scalable Framework for Neural Population Decoding} (POYO), NeurIPS 2023.
+\item Azabou et al., \emph{Multi-session, multi-task neural decoding from distinct cell-types and brain regions} (POYO+), ICLR 2025.
+\item Perich, Gallego \& Miller, \emph{A neural population mechanism for rapid learning}, Neuron 2018. Data: DANDI:000688.
+\end{itemize}
+
+\end{document}
