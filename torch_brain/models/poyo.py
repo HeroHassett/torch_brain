@@ -210,7 +210,9 @@ class POYO(nn.Module):
             )
 
         # input
-        inputs = self.unit_emb(input_unit_index) + self.token_type_emb(input_token_type)
+        inputs = self.unit_emb(input_unit_index) + self._embed_token_type(
+            input_token_type
+        )
         input_timestamp_emb = self.rotary_emb(input_timestamps)
 
         # latents
@@ -254,6 +256,15 @@ class POYO(nn.Module):
             output = [output[b][output_mask[b]] for b in range(output.size(0))]
 
         return output
+
+    def _embed_token_type(self, input_token_type: torch.Tensor) -> torch.Tensor:
+        if input_token_type.device.type == "mps":
+            # Almost every input token has the same type. On MPS, the embedding
+            # backward pass serializes when many lookups hit the same row (about
+            # 1 s per training step), while a one-hot matmul gives the same result
+            # and has a fast backward pass.
+            return _one_hot_embedding(input_token_type, self.token_type_emb.weight)
+        return self.token_type_emb(input_token_type)
 
     def tokenize(self, data: Data) -> dict:
         r"""Tokenizer used to tokenize Data for the POYO model.
@@ -301,6 +312,11 @@ class POYO(nn.Module):
 
         # create session index for output
         session_index = self.session_emb.tokenizer(data.session.id)
+
+        # Timestamps are relative to the start of the context window, so float32 is
+        # precise enough. Apple-Silicon (MPS) GPUs do not support float64 tensors.
+        spike_timestamps = spike_timestamps.astype(np.float32)
+        latent_timestamps = latent_timestamps.astype(np.float32)
 
         data_dict = dict(
             # input sequence (keys/values for the encoder)
@@ -382,6 +398,23 @@ class POYO(nn.Module):
         model = cls(**hparams, dim_out=dim_out)
         model.load_state_dict(state_dict)
         return model
+
+
+def _one_hot_embedding(index: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+    r"""Same result as ``F.embedding(index, weight)``, computed as a one-hot matmul.
+
+    Only practical for small vocabularies, since the one-hot tensor has shape
+    :math:`(*, V)`.
+
+    Args:
+        index: Integer indices of any shape :math:`(*)`.
+        weight: Embedding table of shape :math:`(V, D)`.
+
+    Returns:
+        Embeddings of shape :math:`(*, D)`.
+    """
+    one_hot = F.one_hot(index, num_classes=weight.size(0)).to(weight.dtype)
+    return one_hot @ weight
 
 
 class _GEGLU(nn.Module):

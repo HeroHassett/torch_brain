@@ -1,8 +1,10 @@
+import copy
 import hashlib
 import os
 from pathlib import Path
 
 import boto3
+import numpy as np
 import pytest
 import torch
 from botocore import UNSIGNED
@@ -10,7 +12,9 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from tqdm import tqdm
 
-from torch_brain.models.poyo import POYO
+from torch_brain.batching import collate
+from torch_brain.data import ArrayDict, Data, IrregularTimeSeries
+from torch_brain.models.poyo import POYO, _one_hot_embedding
 
 # The checkpoints all have the same readout dimension
 # (since they were trained for hand-velocity decoding)
@@ -139,3 +143,76 @@ def test_load_pretrained_forward_pass(pretrained_checkpoint):
 
     # Verify output shape
     assert outputs.shape == (batch_size, n_out, READOUT_DIM)
+
+
+def _tiny_model() -> POYO:
+    model = POYO(
+        sequence_length=1.0,
+        latent_step=0.25,
+        num_latents_per_step=4,
+        dim_out=READOUT_DIM,
+        dim=32,
+        depth=1,
+        dim_head=16,
+    )
+    model.unit_emb.initialize_vocab(["u0", "u1"])
+    model.session_emb.initialize_vocab(["s0"])
+    return model
+
+
+def _tiny_data() -> Data:
+    return Data(
+        spikes=IrregularTimeSeries(
+            timestamps=np.array([0.1, 0.5, 0.9]),
+            unit_index=np.array([0, 1, 0]),
+            domain="auto",
+        ),
+        units=ArrayDict(id=np.array(["u0", "u1"])),
+        session=Data(id="s0"),
+        domain="auto",
+    )
+
+
+def test_tokenize_emits_float32_timestamps():
+    model = _tiny_model()
+    tokens = model.tokenize(_tiny_data())
+    assert tokens["input_timestamps"].obj.dtype == np.float32
+    assert tokens["latent_timestamps"].dtype == np.float32
+
+
+def test_one_hot_embedding_matches_embedding():
+    weight = torch.randn(4, 16, requires_grad=True)
+    ref_weight = weight.detach().clone().requires_grad_(True)
+    index = torch.randint(0, 4, (3, 50))
+    grad = torch.randn(3, 50, 16)
+
+    out = _one_hot_embedding(index, weight)
+    ref = torch.nn.functional.embedding(index, ref_weight)
+    torch.testing.assert_close(out, ref)
+
+    out.backward(grad)
+    ref.backward(grad)
+    torch.testing.assert_close(weight.grad, ref_weight.grad)
+
+
+@pytest.mark.skipif(
+    not torch.backends.mps.is_available(), reason="requires an Apple-Silicon GPU"
+)
+def test_forward_backward_on_mps_matches_cpu():
+    torch.manual_seed(0)
+    model = _tiny_model().eval()
+    model_mps = copy.deepcopy(model).to("mps")
+    batch = collate([model.tokenize(_tiny_data()) for _ in range(2)])
+    output_timestamps = torch.rand(2, 8)
+
+    model(**batch, output_timestamps=output_timestamps).sum().backward()
+    batch_mps = {k: v.to("mps") for k, v in batch.items()}
+    model_mps(
+        **batch_mps, output_timestamps=output_timestamps.to("mps")
+    ).sum().backward()
+
+    params_mps = model_mps.parameters()
+    for (name, p), p_mps in zip(model.named_parameters(), params_mps, strict=True):
+        torch.testing.assert_close(
+            p_mps.grad.cpu(), p.grad, atol=1e-4, rtol=1e-4, msg=name
+        )
