@@ -157,21 +157,25 @@ class SparseLamb(Optimizer):
                     adam_step.add_(p.data, alpha=group["weight_decay"])
 
                 adam_norm = torch.norm(adam_step)
-                if weight_norm == 0 or adam_norm == 0:
-                    trust_ratio = 1
-                else:
-                    trust_ratio = weight_norm / adam_norm
+                # torch.where keeps the trust ratio on the device. Branching on the
+                # norms in Python, or passing a tensor as `alpha`, would force a
+                # device-to-host sync for every parameter at every step.
+                trust_ratio = torch.where(
+                    (weight_norm == 0) | (adam_norm == 0),
+                    torch.ones_like(weight_norm),
+                    weight_norm / adam_norm,
+                )
                 state["weight_norm"] = weight_norm
                 state["adam_norm"] = adam_norm
                 state["trust_ratio"] = trust_ratio
                 if self.adam:
-                    trust_ratio = 1
+                    trust_ratio = torch.ones_like(weight_norm)
                 if is_sparse:
                     # alpha_vec = torch.full((p.size(0),), -step_size * trust_ratio)
                     p.data.scatter_add_(
                         0, mask_idx, adam_step[mask].mul_(-step_size * trust_ratio)
                     )
                 else:
-                    p.data.add_(adam_step, alpha=-step_size * trust_ratio)
+                    p.data.add_(adam_step * trust_ratio, alpha=-step_size)
 
         return loss

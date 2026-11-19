@@ -107,5 +107,7 @@ def weighted_mse_loss_fn(pred, target, weights):
     """Simple sample-weighted MSE loss"""
     loss = torch.nn.functional.mse_loss(pred, target, reduction="none")
     loss = loss.flatten(1).mean(1) * weights
-    loss = loss.sum() / weights.sum()
+    # A batch can be fully zero-weighted (e.g. inside `cursor_outlier_segments`).
+    # The loss is then 0 instead of NaN, which would corrupt the weights.
+    loss = loss.sum() / weights.sum().clamp(min=1e-8)
     return loss
